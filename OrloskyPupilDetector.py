@@ -4,8 +4,11 @@ import random
 import math
 import tkinter as tk
 import os
+import sys
 from tkinter import filedialog
 import matplotlib.pyplot as plt
+
+HIGH_FPS_MODE = False
 
 # Crop the image to maintain a specific aspect ratio (width:height) before resizing. 
 def crop_to_aspect_ratio(image, width=640, height=480):
@@ -287,8 +290,11 @@ def process_frames(thresholded_image_strict, thresholded_image_medium, threshold
     ellipse_reduced_contours = [] #holds an array of the best contour points from the fitting process
     goodness = 0 #goodness value for best ellipse
     best_array = 0 
-    kernel_size = 5  # Size of the kernel (5x5)
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    # kernel_size = 5  # Size of the kernel (5x5)
+    # kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    k_size = int(gray_frame.shape[1] * 0.025)
+    k_size = k_size if k_size % 2 != 0 else k_size + 1 # Ensure the kernel size is an odd number
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_size, k_size))
     gray_copy1 = gray_frame.copy()
     gray_copy2 = gray_frame.copy()
     gray_copy3 = gray_frame.copy()
@@ -298,7 +304,9 @@ def process_frames(thresholded_image_strict, thresholded_image_medium, threshold
     #iterate through binary images and see which fits the ellipse best
     for i in range(1,4):
         # Dilate the binary image
-        dilated_image = cv2.dilate(image_array[i-1], kernel, iterations=2)#medium
+        # dilated_image = cv2.dilate(image_array[i-1], kernel, iterations=2)#medium
+        # Apply morphological closing to fill holes without expanding the boundary
+        dilated_image = cv2.morphologyEx(image_array[i-1], cv2.MORPH_CLOSE, kernel, iterations=2)
         
         # Find contours
         contours, hierarchy = cv2.findContours(dilated_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -403,15 +411,19 @@ def process_frame(frame):
     return final_rotated_rect
 
 # Loads a video and finds the pupil in each frame
-def process_video(video_path, input_method):
+def process_video(video_source, input_method):
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4 format
     out = cv2.VideoWriter('C:/Storage/Source Videos/output_video.mp4', fourcc, 30.0, (640, 480))  # Output video filename, codec, frame rate, and frame size
 
     if input_method == 1:
-        cap = cv2.VideoCapture(video_path)
+        cap = cv2.VideoCapture(video_source)
     elif input_method == 2:
-        cap = cv2.VideoCapture(00, cv2.CAP_DSHOW)  # Camera input
+        cap = cv2.VideoCapture(video_source)  # Camera input
+        if HIGH_FPS_MODE:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            cap.set(cv2.CAP_PROP_FPS, 120)
         cap.set(cv2.CAP_PROP_EXPOSURE, -5)
     else:
         print("Invalid video source.")
@@ -429,6 +441,8 @@ def process_video(video_path, input_method):
         ret, frame = cap.read()
         if not ret:
             break
+
+        frame = cv2.flip(frame, 0) # 0 = vertical flip
 
         # Crop and resize frame
         frame = crop_to_aspect_ratio(frame)
@@ -489,7 +503,7 @@ def select_video():
     video_path = 'C:/Google Drive/Eye Tracking/fulleyetest.mp4'
     if not os.path.exists(video_path):
         print("No file found at hardcoded path. Please select a video file.")
-        video_path = filedialog.askopenfilename(title="Select Video File", filetypes=[("Video Files", "*.mp4;*.avi")])
+        video_path = filedialog.askopenfilename(title="Select Video File", filetypes=[("Video Files", "*.mp4 *.avi")])
         if not video_path:
             print("No file selected. Exiting.")
             return
@@ -498,6 +512,13 @@ def select_video():
     process_video(video_path, 1)
 
 if __name__ == "__main__":
-    select_video()
+    if len(sys.argv) > 1:
+        video_source = sys.argv[1]
+        if video_source.isdigit():
+            process_video(int(video_source), 2)  # 2 for webcam
+        else:
+            process_video(video_source, 1)  # 1 for video file
+    else:
+        select_video()
 
 
