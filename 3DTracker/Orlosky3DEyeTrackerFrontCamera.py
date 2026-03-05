@@ -8,6 +8,9 @@ from tkinter import ttk, filedialog
 import sys
 import time
 
+gaze_buffer = [] # Moving average buffer
+BUFFER_SIZE = 5  # Small enough to be responsive, large enough to stop jitter
+
 try:
     import gl_sphere
     GL_SPHERE_AVAILABLE = True
@@ -45,10 +48,10 @@ circle_x = EXT_CX
 circle_y = EXT_CY
 
 # Approximate focal length in pixels (simple pinhole model)
-EXT_FX = 600.0
-EXT_FY = 600.0
+EXT_FX = 950.0
+EXT_FY = 950.0
 
-# Function to detect available cameras (Mac friendly - no MSMF)
+# Function to detect available cameras 
 def detect_cameras(max_cams=10):
     available_cameras = []
     for i in range(max_cams):
@@ -441,8 +444,13 @@ def update_gaze_circle_from_current_gaze():
     global circle_x, circle_y, last_gaze_dir, calibrated
     if not calibrated or last_gaze_dir is None:
         return
+    
+    gaze_buffer.append(last_gaze_dir)
+    if len(gaze_buffer) > BUFFER_SIZE: gaze_buffer.pop(0)
+    avg_gaze = np.mean(gaze_buffer, axis=0)
+    avg_gaze /= np.linalg.norm(avg_gaze)
 
-    g = R_gaze_to_cam @ last_gaze_dir
+    g = R_gaze_to_cam @ avg_gaze
     if g[2] <= 1e-6:
         return
 
@@ -681,6 +689,8 @@ def process_camera():
         ret_eye, eye_frame = eye_cap.read()
         if not ret_eye:
             break
+            
+        eye_frame = cv2.flip(eye_frame, 0)
 
         cv2.imshow("Original Eye Frame", eye_frame)
 
@@ -741,7 +751,7 @@ def selection_gui():
     root.update()
     root.attributes('-topmost', False)
 
-    tk.Label(root, text="Orlosky Eye Tracker 3D", font=("Arial", 12, "bold")).pack(pady=10)
+    tk.Label(root, text="Eye Tracker 3D", font=("Arial", 12, "bold")).pack(pady=10)
     tk.Label(root, text="Select Camera:").pack(pady=5)
 
     selected_camera = tk.StringVar()

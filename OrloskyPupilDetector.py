@@ -392,6 +392,8 @@ def process_frame(frame):
 
     # Convert to grayscale to handle pixel value operations
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    if HIGH_FPS_MODE:
+        gray_frame = cv2.GaussianBlur(gray_frame, (5, 5), 0)
     darkest_pixel_value = gray_frame[darkest_point[1], darkest_point[0]]
     
     # apply thresholding operations at different levels
